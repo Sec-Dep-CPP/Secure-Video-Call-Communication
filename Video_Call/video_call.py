@@ -1,4 +1,4 @@
-import socket 
+import socket  
 import struct
 import cv2
 import numpy as np
@@ -7,19 +7,13 @@ import time
 import os
 import ctypes
 from picamera2 import Picamera2
-from secrets import token_bytes
 
-# === Environment and AES Key Setup ===
+# === Environment Setup ===
 script_dir = os.path.dirname(os.path.abspath(__file__))
 with open("/tmp/video_call.pid", "w") as f:
     f.write(str(os.getpid()))
 
-aes_key = b"1234567890abcdef"  # 16 bytes
-aes_iv  = b"abcdef1234567890"  # 16 bytes
-os.environ["AES_KEY"] = aes_key.hex()
-os.environ["AES_IV"] = aes_iv.hex()
-
-# Load AES and Audio shared libraries
+# === Load AES and Audio shared libraries ===
 libaes = ctypes.CDLL(os.path.join(script_dir, "libaes.so"))
 libaudio = ctypes.CDLL(os.path.join(script_dir, "libaudio.so"))
 
@@ -35,35 +29,44 @@ libaes.aes_ctr_encrypt.restype = None
 
 # Audio C function setup with AES key/iv
 libaudio.start_audio_sender.argtypes = [
-    ctypes.c_char_p,  # IP
-    ctypes.c_int,     # Port
-    ctypes.POINTER(ctypes.c_ubyte),  # Key
-    ctypes.POINTER(ctypes.c_ubyte)   # IV
+    ctypes.c_char_p,
+    ctypes.c_int,
+    ctypes.POINTER(ctypes.c_ubyte),
+    ctypes.POINTER(ctypes.c_ubyte)
 ]
 libaudio.start_audio_receiver.argtypes = [
-    ctypes.c_int,     # Port
-    ctypes.POINTER(ctypes.c_ubyte),  # Key
-    ctypes.POINTER(ctypes.c_ubyte)   # IV
+    ctypes.c_int,
+    ctypes.POINTER(ctypes.c_ubyte),
+    ctypes.POINTER(ctypes.c_ubyte)
 ]
 
 # === Configuration ===
 PARTNER_IP = os.environ.get("PARTNER_IP", "127.0.0.1")
 PORT_VIDEO = 9001
 PORT_AUDIO = 9002
+AES_KEY_HEX = os.environ.get("AES_KEY")
+AES_IV_HEX = os.environ.get("AES_IV")
+
+if not AES_KEY_HEX or not AES_IV_HEX:
+    raise ValueError("AES_KEY and AES_IV must be set in the environment.")
+
+key = bytes.fromhex(AES_KEY_HEX)
+iv = bytes.fromhex(AES_IV_HEX)
+
+key_buf = (ctypes.c_ubyte * 16)(*key)
+iv_buf = (ctypes.c_ubyte * 16)(*iv)
+
 HEADER_TYPE = b"VIDEO_FRAME".ljust(16, b"\0")
 HEADER_LEN = 16 + 4  # type + payload length
 
 def encrypt(data):
     buf = ctypes.create_string_buffer(len(data))
-    key = bytes.fromhex(os.environ["AES_KEY"])
-    iv = bytes.fromhex(os.environ["AES_IV"])
     libaes.aes_ctr_encrypt(data, buf, len(data), key, iv)
     return buf.raw
 
 def decrypt(data):
     return encrypt(data)  # CTR is symmetric
 
-# === Video Sender ===
 def video_sender():
     print("[Sender] Starting video sender...")
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -96,7 +99,6 @@ def video_sender():
     finally:
         sock.close()
 
-# === Helper to receive exact number of bytes ===
 def receive_exact(sock, n):
     data = b""
     while len(data) < n:
@@ -106,7 +108,6 @@ def receive_exact(sock, n):
         data += packet
     return data
 
-# === Video Receiver ===
 def video_receiver():
     print("[Receiver] Waiting for sender...")
     server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -150,9 +151,6 @@ def video_receiver():
 
 # === Run all components in parallel ===
 if __name__ == "__main__":
-    key_buf = (ctypes.c_ubyte * 16)(*bytes.fromhex(os.environ["AES_KEY"]))
-    iv_buf = (ctypes.c_ubyte * 16)(*bytes.fromhex(os.environ["AES_IV"]))
-
     threads = [
         threading.Thread(target=video_receiver, daemon=True),
         threading.Thread(target=video_sender, daemon=True),
