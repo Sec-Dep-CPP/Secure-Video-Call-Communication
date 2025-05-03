@@ -30,15 +30,9 @@ void derive_key_iv(unsigned char *shared_secret, int secret_size) {
 }
 
 void perform_dh_key_exchange(int sockfd) {
-    DH *dh = DH_new();
-    if (!dh || !DH_generate_parameters_ex(dh, 1024, DH_GENERATOR_2, NULL)) {
-        fprintf(stderr, "[!] DH initialization failed.\n");
-        exit(1);
-    }
-
-    if (!DH_generate_key(dh)) {
-        fprintf(stderr, "[!] DH_generate_key failed.\n");
-        DH_free(dh);
+    DH *dh = DH_get_2048_256(); // Use a standard group
+    if (!dh || !DH_generate_key(dh)) {
+        fprintf(stderr, "[!] DH setup failed.\n");
         exit(1);
     }
 
@@ -46,76 +40,20 @@ void perform_dh_key_exchange(int sockfd) {
     DH_get0_key(dh, &pub_key, NULL);
     int pub_len = BN_num_bytes(pub_key);
     unsigned char *pub_buf = malloc(pub_len);
-    if (!pub_buf) {
-        fprintf(stderr, "[!] malloc failed for pub_buf.\n");
-        DH_free(dh);
-        exit(1);
-    }
     BN_bn2bin(pub_key, pub_buf);
-
-    int peer_len;
-    if (recv(sockfd, &peer_len, sizeof(int), 0) <= 0) {
-        fprintf(stderr, "[!] Failed to receive peer length.\n");
-        free(pub_buf);
-        DH_free(dh);
-        exit(1);
-    }
-    unsigned char *peer_buf = malloc(peer_len);
-    if (!peer_buf) {
-        fprintf(stderr, "[!] malloc failed for peer_buf.\n");
-        free(pub_buf);
-        DH_free(dh);
-        exit(1);
-    }
-    if (recv(sockfd, peer_buf, peer_len, 0) <= 0) {
-        fprintf(stderr, "[!] Failed to receive peer key.\n");
-        free(pub_buf);
-        free(peer_buf);
-        DH_free(dh);
-        exit(1);
-    }
-    BIGNUM *peer_key = BN_bin2bn(peer_buf, peer_len, NULL);
-    if (!peer_key) {
-        fprintf(stderr, "[!] BN_bin2bn failed.\n");
-        free(pub_buf);
-        free(peer_buf);
-        DH_free(dh);
-        exit(1);
-    }
 
     send(sockfd, &pub_len, sizeof(int), 0);
     send(sockfd, pub_buf, pub_len, 0);
 
+    int peer_len;
+    recv(sockfd, &peer_len, sizeof(int), 0);
+    unsigned char *peer_buf = malloc(peer_len);
+    recv(sockfd, peer_buf, peer_len, 0);
+
+    BIGNUM *peer_key = BN_bin2bn(peer_buf, peer_len, NULL);
     int secret_size = DH_size(dh);
-    if (secret_size <= 0) {
-        fprintf(stderr, "[!] Invalid DH secret size.\n");
-        BN_free(peer_key);
-        free(pub_buf);
-        free(peer_buf);
-        DH_free(dh);
-        exit(1);
-    }
-
     unsigned char *secret = malloc(secret_size);
-    if (!secret) {
-        fprintf(stderr, "[!] malloc failed for secret.\n");
-        BN_free(peer_key);
-        free(pub_buf);
-        free(peer_buf);
-        DH_free(dh);
-        exit(1);
-    }
-
     secret_size = DH_compute_key(secret, peer_key, dh);
-    if (secret_size <= 0) {
-        fprintf(stderr, "[!] DH_compute_key failed.\n");
-        BN_free(peer_key);
-        free(pub_buf);
-        free(peer_buf);
-        free(secret);
-        DH_free(dh);
-        exit(1);
-    }
 
     derive_key_iv(secret, secret_size);
 
@@ -211,8 +149,12 @@ int main(int argc, char *argv[]) {
     connect(sockfd, (struct sockaddr*)&server_addr, sizeof(server_addr));
     printf("[Client] Connected to server.\n");
 
-    //Do DH key exchange once immediately after connection
     perform_dh_key_exchange(sockfd);
+
+    printf("[Client] Environment setup:\n");
+    printf("  PARTNER_IP = %s\n", getenv("PARTNER_IP"));
+    printf("  AES_KEY    = %s\n", getenv("AES_KEY"));
+    printf("  AES_IV     = %s\n", getenv("AES_IV"));
 
     pthread_t send_thread, recv_thread;
     pthread_create(&recv_thread, NULL, recv_loop, &sockfd);
