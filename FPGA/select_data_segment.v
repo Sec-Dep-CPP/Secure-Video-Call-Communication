@@ -1,7 +1,7 @@
 module select_data_segment(
-    input [1:0] SW,
-    input [63:0] msg,
-    input [63:0] key,
+    input [2:0] SW,
+    input [127:0] msg,
+    input [127:0] key,
     output reg [15:0] msg_p,
     output reg [15:0] key_p
     );
@@ -33,6 +33,33 @@ module select_data_segment(
     msg_p = msg[63:48];
     key_p = key[63:48];  
     end
+    
+    4:
+    begin
+    msg_p = msg[79:64];
+    key_p = key[79:64];  
+    end
+    
+    5:
+    begin
+    msg_p = msg[95:80];
+    key_p = key[95:80];  
+    end
+    
+    6:
+    begin
+    msg_p = msg[111:96];
+    key_p = key[111:96];  
+    end
+    
+    7:
+    begin
+    msg_p = msg[127:112];
+    key_p = key[127:112];  
+    end
+    
+    
+    
     
     endcase
     
