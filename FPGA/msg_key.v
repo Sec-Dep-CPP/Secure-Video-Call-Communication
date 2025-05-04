@@ -1,14 +1,14 @@
 module msg_key(
-    input [63:0] data,     // 64-bit data from FIFO
+    input [127:0] data,     // 64-bit data from FIFO
     input clk,             // Clock signal
     input rd_en,           // Read enable signal from FIFO
-    output [63:0] msg,
-    output [63:0] key,     // 64-bit output block
+    output [127:0] msg,
+    output [127:0] key,     // 64-bit output block
     output ready     // Block ready signal
 );
 
-    reg [63:0] r_msg = 0;
-    reg [63:0] r_key = 0;          // Register for storing the 64-bit block
+    reg [127:0] r_msg = 0;
+    reg [127:0] r_key = 0;          // Register for storing the 64-bit block
     reg counter = 0;           // Counter to track the data storage progress
     reg r_ready = 0;           // Ready signal for the block
     reg rd_en_d1 = 0;                // Delayed read enable signal (1 cycle latency)
