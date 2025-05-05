@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 
 #define SAMPLE_RATE 44100
 #define CHANNELS 1
@@ -61,7 +62,17 @@ void start_audio_sender(const char* ip, int port, const uint8_t* key, const uint
                 break;
             }
         }
-        AES_CTR_xcrypt_buffer(&ctx, (uint8_t*)buffer, frames * FRAME_SIZE);
+        // === Timing encryption ===
+        struct timespec start, end;
+
+clock_gettime(CLOCK_MONOTONIC, &start);
+AES_CTR_xcrypt_buffer(&ctx, (uint8_t*)buffer, frames * FRAME_SIZE);
+clock_gettime(CLOCK_MONOTONIC, &end);
+
+double elapsed_ms = (end.tv_sec - start.tv_sec) * 1000.0 +
+                    (end.tv_nsec - start.tv_nsec) / 1e6;
+
+printf("[AudioSender] Encrypted %d bytes in %.3f ms\n", frames * FRAME_SIZE, elapsed_ms);
         send(sockfd, buffer, frames * FRAME_SIZE, 0);
     }
 
