@@ -6,6 +6,7 @@
 #include <string.h>
 #include <arpa/inet.h>
 #include <alsa/asoundlib.h>
+#include <time.h>
 
 #define SAMPLE_RATE 44100
 #define CHANNELS 1
@@ -54,11 +55,21 @@ void start_audio_receiver(int port, const uint8_t* key, const uint8_t* iv) {
     printf("[AudioReceiver] Sender connected.\n");
 
     while (1) {
-        ssize_t bytes_received = recv(client_fd, buffer, BUFFER_SIZE, MSG_WAITALL);
-        if (bytes_received <= 0) break;
-        AES_CTR_xcrypt_buffer(&ctx, (uint8_t*)buffer, bytes_received);
-        snd_pcm_writei(handle, buffer, bytes_received / FRAME_SIZE);
-    }
+    ssize_t bytes_received = recv(client_fd, buffer, BUFFER_SIZE, MSG_WAITALL);
+    if (bytes_received <= 0) break;
+
+    struct timespec start, end;
+    clock_gettime(CLOCK_MONOTONIC, &start);
+
+    AES_CTR_xcrypt_buffer(&ctx, (uint8_t*)buffer, bytes_received);
+
+    clock_gettime(CLOCK_MONOTONIC, &end);
+    double elapsed_ms = (end.tv_sec - start.tv_sec) * 1000.0 + (end.tv_nsec - start.tv_nsec) / 1e6;
+
+    printf("[AudioReceiver] Decrypted %zd bytes in %.3f ms\n", bytes_received, elapsed_ms);
+
+    snd_pcm_writei(handle, buffer, bytes_received / FRAME_SIZE);
+}
 
     close(client_fd);
     close(server_fd);
