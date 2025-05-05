@@ -60,12 +60,19 @@ HEADER_TYPE = b"VIDEO_FRAME".ljust(16, b"\0")
 HEADER_LEN = 16 + 4  # type + payload length
 
 def encrypt(data):
+    start = time.perf_counter()
     buf = ctypes.create_string_buffer(len(data))
     libaes.aes_ctr_encrypt(data, buf, len(data), key, iv)
+    end = time.perf_counter()
+    print(f"VIDEO: [Encrypt] {len(data)} bytes in {(end - start) * 1000:.3f} ms")
     return buf.raw
 
 def decrypt(data):
-    return encrypt(data)  # CTR is symmetric
+    start = time.perf_counter()
+    result = encrypt(data)  # CTR is symmetric
+    end = time.perf_counter()
+    print(f"VIDEO: [Decrypt] {len(data)} bytes in {(end - start) * 1000:.3f} ms")
+    return result
 
 def video_sender():
     print("[Sender] Starting video sender...")
